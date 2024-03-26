@@ -90,35 +90,108 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.2/html2pdf.bundle.min.js"></script>
     <script>
-      function addProductRow() {
+      function addProductRow(image = "", name = "", price = "") {
         var tableBody = document.querySelector("#invoice-table tbody");
         var newRow = tableBody.insertRow();
         newRow.innerHTML = `
-        <td><input type="file" accept="image/*" onchange="previewImage(this)"></td>
-        <td><input type="text" placeholder="Product Name"></td>
-        <td><input type="number" step="0.01" placeholder="Price"></td>
-        <td><button class="remove-btn" onclick="removeProductRow(this)">Remove</button></td>
-    `;
+          <td>
+              <input type="file" accept="image/*" onchange="previewImage(this)" />
+              <img class="product-preview" src="${image}" style="max-width: 100px; max-height: 100px; display: ${
+          image ? "block" : "none"
+        }" />
+          </td>
+          <td><input type="text" placeholder="Product Name" value="${name}" /></td>
+          <td><input type="number" step="0.01" placeholder="Price" value="${price}" /></td>
+          <td><button class="remove-btn" onclick="removeProductRow(this)">Remove</button></td>
+        `;
+        calculateTotal();
       }
 
       function previewImage(input) {
         if (input.files && input.files[0]) {
           var reader = new FileReader();
           reader.onload = function (e) {
-            var imgElement = document.createElement("img");
+            var imgElement = input.parentNode.querySelector(".product-preview");
+            if (!imgElement) {
+              imgElement = document.createElement("img");
+              imgElement.classList.add("product-preview");
+              imgElement.style.maxWidth = "100px";
+              imgElement.style.maxHeight = "100px";
+              input.parentNode.appendChild(imgElement);
+            }
             imgElement.src = e.target.result;
-            imgElement.classList.add("product-image");
-            input.parentNode.appendChild(imgElement);
+            imgElement.style.display = "block";
+            // Save image to local storage
+            var rowIndex = getRowIndex(input);
+            saveProductDataToLocalstorage(
+              rowIndex,
+              input.parentNode.parentNode,
+            );
           };
           reader.readAsDataURL(input.files[0]);
         }
         input.style.display = "none";
       }
 
+      function getRowIndex(input) {
+        var row = input.parentNode.parentNode;
+        return Array.prototype.indexOf.call(row.parentNode.children, row);
+      }
+
+      function saveProductDataToLocalstorage(rowIndex, row) {
+        var productData = {};
+        productData.image = row.querySelector(".product-preview").src;
+        productData.name = row.querySelector('input[type="text"]').value;
+        productData.price = row.querySelector('input[type="number"]').value;
+
+        var productsData = JSON.parse(localStorage.getItem("products")) || [];
+        productsData[rowIndex] = productData;
+        localStorage.setItem("products", JSON.stringify(productsData));
+
+        // Save customer name and serial number separately
+        var customerName = document.querySelector("#customer-name").value;
+        var serialNumber = document.querySelector("#serial-number").value;
+        localStorage.setItem("customerName", customerName);
+        localStorage.setItem("serialNumber", serialNumber);
+      }
+
+      function loadProductsFromLocalstorage() {
+        var productsData = JSON.parse(localStorage.getItem("products")) || [];
+        productsData.forEach(function (productData) {
+          addProductRow(productData.image, productData.name, productData.price);
+        });
+      }
+
+      document.addEventListener("DOMContentLoaded", function () {
+        loadCustomerDataFromLocalstorage();
+        loadProductsFromLocalstorage();
+      });
+
+      function loadCustomerDataFromLocalstorage() {
+        var customerName = localStorage.getItem("customerName");
+        var serialNumber = localStorage.getItem("serialNumber");
+        document.getElementById("customer-name").value = customerName || "";
+        document.getElementById("serial-number").value = serialNumber || "";
+      }
+
       function removeProductRow(button) {
         var row = button.parentNode.parentNode;
         row.parentNode.removeChild(row);
         calculateTotal();
+        updateLocalstorageData();
+      }
+
+      function updateLocalstorageData() {
+        var tableRows = document.querySelectorAll("#invoice-table tbody tr");
+        var productsData = [];
+        tableRows.forEach(function (row, index) {
+          var productData = {};
+          productData.image = row.querySelector(".product-preview").src;
+          productData.name = row.querySelector('input[type="text"]').value;
+          productData.price = row.querySelector('input[type="number"]').value;
+          productsData[index] = productData;
+        });
+        localStorage.setItem("products", JSON.stringify(productsData));
       }
 
       function calculateTotal() {
@@ -136,11 +209,11 @@
         var serialNumber = document.getElementById("serial-number").value;
         var element = document.getElementById("invoice-table");
         var content = `
-        <h2>Invoice</h2>
-        <p><strong>Customer Name:</strong> ${customerName}</p>
-        <p><strong>Serial Number:</strong> ${serialNumber}</p>
-        ${element.outerHTML}
-    `;
+          <h2>Invoice</h2>
+          <p><strong>Customer Name:</strong> ${customerName}</p>
+          <p><strong>Serial Number:</strong> ${serialNumber}</p>
+          ${element.outerHTML}
+        `;
         var opt = {
           margin: 1,
           filename: "invoice.pdf",
@@ -154,6 +227,7 @@
       document.addEventListener("input", function (event) {
         if (event.target.matches('input[type="number"]')) {
           calculateTotal();
+          updateLocalstorageData();
         }
       });
     </script>
